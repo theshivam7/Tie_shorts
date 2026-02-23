@@ -84,9 +84,8 @@ for sample in tqdm(ds, desc="test (transcribing)"):
     audio_array = np.array(audio_data["array"], dtype=np.float32)
     sr = audio_data["sampling_rate"]
 
-    # Ensure mono
-    if audio_array.ndim > 1:
-        audio_array = audio_array.mean(axis=1)
+    # Ensure 1D mono array
+    audio_array = audio_array.flatten()
 
     # Resample to 16kHz
     if sr != 16000:
