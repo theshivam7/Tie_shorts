@@ -12,6 +12,7 @@ Uses only the 'test' split.
 
 import argparse
 import os
+import tempfile
 import warnings
 
 import jiwer
@@ -86,13 +87,22 @@ for sample in tqdm(ds, desc="test (transcribing)"):
     # Whisper expects 16kHz mono audio
     if sr != 16000:
         audio_array = librosa.resample(audio_array, orig_sr=sr, target_sr=16000)
+        sr = 16000
+
+    # Write to temp WAV file (scipy needs int sample rate)
+    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
+        tmp_path = tmp.name
+        import scipy.io.wavfile
+        scipy.io.wavfile.write(tmp_path, int(sr), (audio_array * 32767).astype(np.int16))
 
     try:
-        result = model.transcribe(audio_array, **_transcribe_kw)
+        result = model.transcribe(tmp_path, **_transcribe_kw)
         hyp_raw = result["text"].strip()
     except Exception as e:
         print(f"  [WARN] Failed to transcribe {sample.get('ID', '?')}: {e}")
         hyp_raw = ""
+    finally:
+        os.unlink(tmp_path)
 
     hyp_norm = hypothesis_transform(hyp_raw) if hyp_raw else ""
 
