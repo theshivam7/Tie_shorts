@@ -18,7 +18,7 @@ import warnings
 import jiwer
 import numpy as np
 import pandas as pd
-from scipy.io import wavfile as scipy_wav
+import librosa
 import torch
 import whisper
 from datasets import load_dataset
@@ -79,23 +79,21 @@ for sample in tqdm(ds, desc="test (transcribing)"):
         continue
     ref = ref.strip()
 
-    # Extract audio and write to a temp wav file for whisper
+    # Extract audio array and resample to 16kHz for whisper
     audio_data = sample["audio"]
     audio_array = np.array(audio_data["array"], dtype=np.float32)
     sr = audio_data["sampling_rate"]
 
-    with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
-        tmp_path = tmp.name
-        scipy_wav.write(tmp_path, sr, (audio_array * 32767).astype(np.int16))
+    # Whisper expects 16kHz mono audio
+    if sr != 16000:
+        audio_array = librosa.resample(audio_array, orig_sr=sr, target_sr=16000)
 
     try:
-        result = model.transcribe(tmp_path, **_transcribe_kw)
+        result = model.transcribe(audio_array, **_transcribe_kw)
         hyp_raw = result["text"].strip()
     except Exception as e:
         print(f"  [WARN] Failed to transcribe {sample.get('ID', '?')}: {e}")
         hyp_raw = ""
-    finally:
-        os.unlink(tmp_path)
 
     hyp_norm = hypothesis_transform(hyp_raw) if hyp_raw else ""
 
