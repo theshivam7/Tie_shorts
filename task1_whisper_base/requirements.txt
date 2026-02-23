@@ -1,0 +1,5 @@
+datasets
+jiwer
+pandas
+soundfile
+tqdm
