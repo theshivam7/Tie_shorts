@@ -4,5 +4,5 @@ openai-whisper
 torch
 pandas
 tqdm
-soundfile
+librosa
 numpy
