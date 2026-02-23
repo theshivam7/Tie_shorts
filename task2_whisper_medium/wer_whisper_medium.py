@@ -79,21 +79,30 @@ for sample in tqdm(ds, desc="test (transcribing)"):
         continue
     ref = ref.strip()
 
-    # Extract audio array and resample to 16kHz for whisper
+    # Extract audio array and resample to 16kHz mono for whisper
     audio_data = sample["audio"]
     audio_array = np.array(audio_data["array"], dtype=np.float32)
     sr = audio_data["sampling_rate"]
 
-    # Whisper expects 16kHz mono audio
+    # Ensure mono
+    if audio_array.ndim > 1:
+        audio_array = audio_array.mean(axis=1)
+
+    # Resample to 16kHz
     if sr != 16000:
         audio_array = librosa.resample(audio_array, orig_sr=sr, target_sr=16000)
-        sr = 16000
 
-    # Write to temp WAV file (scipy needs int sample rate)
+    # Write to temp WAV file
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
         tmp_path = tmp.name
-        import scipy.io.wavfile
-        scipy.io.wavfile.write(tmp_path, int(sr), (audio_array * 32767).astype(np.int16))
+        import wave
+        import struct
+        audio_int16 = (audio_array * 32767).astype(np.int16)
+        with wave.open(tmp_path, 'w') as wf:
+            wf.setnchannels(1)
+            wf.setsampwidth(2)
+            wf.setframerate(16000)
+            wf.writeframes(audio_int16.tobytes())
 
     try:
         result = model.transcribe(tmp_path, **_transcribe_kw)
