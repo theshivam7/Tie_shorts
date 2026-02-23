@@ -18,7 +18,7 @@ import warnings
 import jiwer
 import numpy as np
 import pandas as pd
-import soundfile as sf
+from scipy.io import wavfile as scipy_wav
 import torch
 import whisper
 from datasets import load_dataset
@@ -86,7 +86,7 @@ for sample in tqdm(ds, desc="test (transcribing)"):
 
     with tempfile.NamedTemporaryFile(suffix=".wav", delete=False) as tmp:
         tmp_path = tmp.name
-        sf.write(tmp_path, audio_array, sr)
+        scipy_wav.write(tmp_path, sr, (audio_array * 32767).astype(np.int16))
 
     try:
         result = model.transcribe(tmp_path, **_transcribe_kw)
