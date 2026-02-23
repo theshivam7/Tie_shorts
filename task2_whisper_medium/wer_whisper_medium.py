@@ -12,7 +12,6 @@ Uses only the 'test' split.
 
 import argparse
 import os
-import tempfile
 import warnings
 
 import jiwer
@@ -158,7 +157,7 @@ if os.path.exists(BASE_RESULTS_CSV):
     base_refs = df_base["reference"].tolist()
     base_hyps = df_base["hypothesis"].tolist()
     bv_refs = [r for r, h in zip(base_refs, base_hyps) if isinstance(h, str) and h]
-    bv_hyps = [h for r, h in zip(base_refs, base_hyps) if isinstance(h, str) and h]
+    bv_hyps = [h for h in base_hyps if isinstance(h, str) and h]
     if bv_refs:
         bv_out = jiwer.process_words(bv_refs, bv_hyps)
         bv_err = bv_out.substitutions + bv_out.deletions + bv_out.insertions
@@ -180,6 +179,11 @@ if os.path.exists(BASE_RESULTS_CSV):
         how="left",
     )
     df_merged["wer_diff"] = df_merged["wer_base"] - df_merged["wer_medium"]
+
+    # Save comparison CSV
+    comparison_csv = "wer_comparison_base_vs_medium.csv"
+    df_merged.to_csv(comparison_csv, index=False)
+    print(f"\n  Per-sample comparison saved to: {comparison_csv}")
 else:
     print(f"  [WARN] Base results not found at: {BASE_RESULTS_CSV}")
     print(f"         Run Task 1 first, then re-run this script.")
