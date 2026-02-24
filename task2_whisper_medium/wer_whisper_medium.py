@@ -35,7 +35,7 @@ os.environ.setdefault("HF_DATASETS_CACHE", HF_CACHE)
 _parser = argparse.ArgumentParser(description="Task 2: Whisper Medium WER")
 _parser.add_argument(
     "--base-csv",
-    default=os.path.join(os.path.dirname(__file__), "..", "task1_whisper_base", "wer_whisper_base_results.csv"),
+    default=os.path.join(os.path.dirname(__file__), "..", "results", "wer_base.csv"),
     help="Path to Task 1 whisper-base results CSV",
 )
 _args = _parser.parse_args()
@@ -137,7 +137,7 @@ for sample in tqdm(ds, desc="test (transcribing)"):
 
     # Periodic checkpoint every 200 samples (crash recovery)
     if len(all_rows) % 200 == 0:
-        pd.DataFrame(all_rows).to_csv("wer_whisper_medium_results_partial.csv", index=False)
+        pd.DataFrame(all_rows).to_csv(os.path.join(os.path.dirname(__file__), "..", "results", "wer_medium_partial.csv"), index=False)
         print(f"  [checkpoint] {len(all_rows)} samples saved")
 
 # --------------- Compute corpus-level WER (including empty hypotheses) ---------------
@@ -199,7 +199,7 @@ if os.path.exists(BASE_RESULTS_CSV):
     df_merged["wer_diff"] = df_merged["wer_base"] - df_merged["wer_medium"]
 
     # Save comparison CSV
-    comparison_csv = "wer_comparison_base_vs_medium.csv"
+    comparison_csv = os.path.join(os.path.dirname(__file__), "..", "results", "wer_comparison.csv")
     df_merged.to_csv(comparison_csv, index=False)
     print(f"\n  Per-sample comparison saved to: {comparison_csv}")
 else:
@@ -270,12 +270,13 @@ To investigate programmatically:
 """)
 
 # --------------- Save final results ---------------
-output_csv = "wer_whisper_medium_results.csv"
+output_csv = os.path.join(os.path.dirname(__file__), "..", "results", "wer_medium.csv")
 df.to_csv(output_csv, index=False)
 print(f"Full results saved to: {output_csv}")
 
 # Clean up partial file
-if os.path.exists("wer_whisper_medium_results_partial.csv"):
-    os.unlink("wer_whisper_medium_results_partial.csv")
+_partial = os.path.join(os.path.dirname(__file__), "..", "results", "wer_medium_partial.csv")
+if os.path.exists(_partial):
+    os.unlink(_partial)
 
 print("\nDone.")

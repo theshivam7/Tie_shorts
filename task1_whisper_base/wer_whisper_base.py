@@ -93,6 +93,6 @@ print(f"Total samples processed: {len(df)}")
 print("=" * 60)
 
 # --------------- Save results ---------------
-output_csv = "wer_whisper_base_results.csv"
+output_csv = os.path.join(os.path.dirname(__file__), "..", "results", "wer_base.csv")
 df.to_csv(output_csv, index=False)
 print(f"\nPer-sample results saved to: {output_csv}")
