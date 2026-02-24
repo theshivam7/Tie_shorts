@@ -39,14 +39,6 @@ Both tasks use `jiwer` for WER computation. Empty hypotheses are scored as WER =
 | Max | 1.0357 (103.57%) | 4.0000 (400.00%) |
 | Perfect Scores | 40 | 3 |
 
-### Head-to-Head
-
-| Outcome | Samples | % |
-|---------|:-------:|:-:|
-| Base wins | 802 | 81.3% |
-| Medium wins | 115 | 11.7% |
-| Tied | 69 | 7.0% |
-
 ### Breakdown by Speech Class
 
 | Class | n | Base WER | Medium WER | Diff |
