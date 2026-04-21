@@ -4,10 +4,13 @@ Word Error Rate (WER) evaluation of OpenAI Whisper **Base** and **Medium** model
 
 ## Key Results
 
-| Model | Mean WER | Median WER | Perfect Scores |
-|-------|:--------:|:----------:|:--------------:|
-| **Whisper Base** | **0.1882 (18.82%)** | **0.1719 (17.19%)** | **40** |
-| Whisper Medium | 0.2940 (29.40%) | 0.2600 (26.00%) | 3 |
+| Model | Corpus WER | Mean per-sample WER | Median per-sample WER | Perfect Scores |
+|-------|:----------:|:-------------------:|:---------------------:|:--------------:|
+| **Whisper Base** | **18.24%** | **18.82%** | **17.19%** | **40** |
+| Whisper Medium | — | 29.40% | 26.00% | 3 |
+
+> **Note:** Corpus WER = total word errors / total reference words (standard ASR metric).
+> Mean/Median are per-sample averages and will differ from corpus WER.
 
 Whisper Base outperforms Medium on **81.3%** of 986 test samples. See [`summary.md`](summary.md) for the full analysis.
 
