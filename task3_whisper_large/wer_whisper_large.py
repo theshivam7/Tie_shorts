@@ -19,7 +19,7 @@ from tqdm import tqdm
 
 sys.path.insert(0, os.path.join(os.path.dirname(__file__), ".."))
 
-from utils.normalize import MODES, get_ref_and_hyp
+from utils.normalize import MODES, get_ref_and_hyp, get_reference_source
 from utils.transcribe import transcribe_sample
 from utils.wer_compute import compute_corpus_wer, compute_sample_wer
 from utils.io_helpers import (
@@ -28,6 +28,7 @@ from utils.io_helpers import (
     save_mode_csv,
     save_checkpoint,
     remove_checkpoint,
+    save_summary_csv,
 )
 
 warnings.filterwarnings("ignore")
@@ -63,42 +64,22 @@ mode_rows: dict[str, list[dict]] = {m: [] for m in MODES}
 print(f"--- Processing test split ({len(ds)} samples) ---")
 
 for sample in tqdm(ds, desc="test (transcribing)"):
-    ref_raw = sample.get("Transcript") or ""
-    if not ref_raw.strip():
+    ref_raw_transcript = (sample.get("Transcript") or "").strip()
+    if not ref_raw_transcript:
         continue
 
     sample_id = sample.get("ID", "")
 
+    # Resume from checkpoint if this sample was already transcribed
+    hyp_raw = None
     if str(sample_id) in completed_ids:
         ckpt_row = next((r for r in checkpoint_rows if str(r["ID"]) == str(sample_id)), None)
-        if ckpt_row:
-            hyp_raw = ckpt_row.get("hypothesis_raw", "")
-            metadata = {
-                "split": "test",
-                "ID": sample_id,
-                "Speaker_ID": sample.get("Speaker_ID", ""),
-                "Gender": sample.get("Gender", ""),
-                "Speech_Class": sample.get("Speech_Class", ""),
-                "Native_Region": sample.get("Native_Region", ""),
-                "Speech_Duration_seconds": sample.get("Speech_Duration_seconds") or "",
-                "Discipline_Group": sample.get("Discipline_Group", ""),
-                "Topic": sample.get("Topic", ""),
-            }
-            for mode_name in MODES:
-                ref, hyp = get_ref_and_hyp(sample, hyp_raw, mode_name)
-                if not ref:
-                    continue
-                wer = compute_sample_wer(ref, hyp)
-                mode_rows[mode_name].append({
-                    **metadata,
-                    "reference": ref,
-                    "hypothesis": hyp,
-                    "hypothesis_raw": hyp_raw,
-                    "wer": round(wer, 4),
-                })
-        continue
+        if ckpt_row is not None:
+            hyp_raw = str(ckpt_row.get("hypothesis_raw") or "")
 
-    hyp_raw = transcribe_sample(model, sample, transcribe_kw)
+    # Fall back to re-transcription if checkpoint lookup failed (prevents silent data loss)
+    if hyp_raw is None:
+        hyp_raw = transcribe_sample(model, sample, transcribe_kw)
 
     metadata = {
         "split": "test",
@@ -113,7 +94,7 @@ for sample in tqdm(ds, desc="test (transcribing)"):
     }
 
     for mode_name in MODES:
-        ref, hyp = get_ref_and_hyp(sample, hyp_raw, mode_name)
+        ref_raw, ref, hyp = get_ref_and_hyp(sample, hyp_raw, mode_name)
 
         if not ref:
             continue
@@ -122,9 +103,12 @@ for sample in tqdm(ds, desc="test (transcribing)"):
 
         mode_rows[mode_name].append({
             **metadata,
+            "mode": mode_name,
+            "reference_source": get_reference_source(mode_name),
+            "reference_raw": ref_raw,
             "reference": ref,
-            "hypothesis": hyp,
             "hypothesis_raw": hyp_raw,
+            "hypothesis": hyp,
             "wer": round(wer, 4),
         })
 
@@ -134,10 +118,12 @@ for sample in tqdm(ds, desc="test (transcribing)"):
         save_checkpoint(checkpoint_rows, MODEL_NAME)
         print(f"  [checkpoint] {len(checkpoint_rows)} samples saved")
 
-# --------------- Save results and print summary ---------------
+# --------------- Save results, print summary, top 20 per mode ---------------
 print("\n" + "=" * 70)
 print(f"WHISPER-{MODEL_NAME.upper()} RESULTS (4-mode WER)")
 print("=" * 70)
+
+summary_rows: list[dict] = []
 
 for mode_name in MODES:
     rows = mode_rows[mode_name]
@@ -152,6 +138,7 @@ for mode_name in MODES:
 
     out_path = save_mode_csv(rows, MODEL_NAME, mode_name)
     print(f"\n  [{mode_name}]")
+    print(f"    Reference source: {get_reference_source(mode_name)}")
     print(f"    Corpus WER: {stats['corpus_wer']:.4f}  ({stats['corpus_wer']*100:.2f}%)")
     print(f"    Mean WER:   {stats['mean_wer']:.4f}  |  Median WER: {stats['median_wer']:.4f}  |  Std: {stats['std_wer']:.4f}")
     print(f"    P90 WER:    {stats['p90_wer']:.4f}  |  P95 WER:    {stats['p95_wer']:.4f}")
@@ -159,31 +146,56 @@ for mode_name in MODES:
     print(f"    Total ref words: {stats['total_ref_words']}  |  Total errors: {stats['total_errors']}")
     print(f"    Saved to: {out_path}")
 
-# --------------- Top 20 highest WER sentences ---------------
-PRIMARY_MODE = "whisper_normalized"
-primary_rows = mode_rows.get(PRIMARY_MODE, [])
+    summary_rows.append({
+        "model": MODEL_NAME,
+        "mode": mode_name,
+        "reference_source": get_reference_source(mode_name),
+        "corpus_wer": round(stats["corpus_wer"], 4),
+        "mean_wer": round(stats["mean_wer"], 4),
+        "median_wer": round(stats["median_wer"], 4),
+        "std_wer": round(stats["std_wer"], 4),
+        "p90_wer": round(stats["p90_wer"], 4),
+        "p95_wer": round(stats["p95_wer"], 4),
+        "num_samples": stats["num_samples"],
+        "num_empty_hyps": stats["num_empty_hyps"],
+        "total_ref_words": stats["total_ref_words"],
+        "total_errors": stats["total_errors"],
+    })
 
-if primary_rows:
-    df_primary = pd.DataFrame(primary_rows)
-    df_sorted = df_primary.sort_values("wer", ascending=False).head(20)
+    df_mode = pd.DataFrame(rows)
+    df_sorted = df_mode.sort_values("wer", ascending=False).head(20)
 
-    print(f"\n{'=' * 70}")
-    print(f"TOP 20 SENTENCES WITH HIGHEST WER (mode: {PRIMARY_MODE})")
-    print("=" * 70)
-
+    print(f"\n    TOP 20 HIGHEST WER [{mode_name}]")
     for i, (_, row) in enumerate(df_sorted.iterrows(), 1):
-        print(f"\n--- #{i} | ID: {row['ID']} | WER: {row['wer']:.4f} ({row['wer']*100:.1f}%) ---")
         dur = row["Speech_Duration_seconds"]
-        print(f"  Duration:     {float(dur):.2f}s" if dur != "" else "  Duration:     N/A")
-        print(f"  Speech Class: {row['Speech_Class']}")
-        print(f"  Region:       {row['Native_Region']}")
-        print(f"  Gender:       {row['Gender']}")
-        print(f"  REFERENCE:    {str(row['reference'])[:200]}")
-        print(f"  HYPOTHESIS:   {str(row['hypothesis'])[:200]}")
+        dur_str = f"{float(dur):.2f}s" if dur != "" else "N/A"
+        print(f"    #{i:2d} ID: {row['ID']}  WER: {row['wer']:.4f} ({row['wer']*100:.1f}%)  "
+              f"Dur: {dur_str}  Region: {row['Native_Region']}  Class: {row['Speech_Class']}")
+        print(f"         REF : {str(row['reference'])[:120]}")
+        print(f"         HYP : {str(row['hypothesis'])[:120]}")
 
-    top20_path = os.path.join(results_dir(), f"top_20_high_wer_{MODEL_NAME}.csv")
+    top20_path = os.path.join(results_dir(), f"top_20_high_wer_{MODEL_NAME}_{mode_name}.csv")
     df_sorted.to_csv(top20_path, index=False)
-    print(f"\n  Top 20 saved to: {top20_path}")
+    print(f"\n    Top 20 saved to: {top20_path}")
+
+# --------------- Save per-model WER summary (CSV + Markdown) ---------------
+if summary_rows:
+    summary_csv = save_summary_csv(summary_rows, MODEL_NAME)
+    print(f"\n  WER summary CSV saved to: {summary_csv}")
+
+    summary_md = os.path.join(results_dir(), f"wer_summary_{MODEL_NAME}.md")
+    with open(summary_md, "w") as f:
+        f.write(f"# Whisper {MODEL_NAME.title()} -- WER Summary (all 4 modes)\n\n")
+        f.write("| mode | reference_source | corpus_wer | mean_wer | median_wer | std_wer | p90_wer | p95_wer | num_samples | num_empty_hyps | total_ref_words | total_errors |\n")
+        f.write("|------|------------------|-----------:|---------:|-----------:|--------:|--------:|--------:|------------:|---------------:|----------------:|-------------:|\n")
+        for r in summary_rows:
+            f.write(f"| {r['mode']} | {r['reference_source']} | {r['corpus_wer']:.4f} | {r['mean_wer']:.4f} | {r['median_wer']:.4f} | {r['std_wer']:.4f} | {r['p90_wer']:.4f} | {r['p95_wer']:.4f} | {r['num_samples']} | {r['num_empty_hyps']} | {r['total_ref_words']} | {r['total_errors']} |\n")
+        f.write("\n## Notes\n\n")
+        f.write("- **raw**: no normalization on either side\n")
+        f.write("- **normalized**: reference as-is from `Normalised_Transcript`, hypothesis normalized with `EnglishTextNormalizer`\n")
+        f.write("- **double_normalized**: both sides normalized; reference from `Normalised_Transcript`\n")
+        f.write("- **whisper_normalized**: both sides normalized; reference from original `Transcript` (gold standard)\n")
+    print(f"  WER summary Markdown saved to: {summary_md}")
 
 remove_checkpoint(MODEL_NAME)
 print("\nDone.")

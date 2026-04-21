@@ -52,3 +52,21 @@ def remove_checkpoint(model_name: str) -> None:
     out_path = os.path.join(results_dir(), f"wer_{model_name}_partial.csv")
     if os.path.exists(out_path):
         os.unlink(out_path)
+
+
+SUMMARY_COLUMNS = [
+    "model", "mode", "reference_source",
+    "corpus_wer", "mean_wer", "median_wer", "std_wer", "p90_wer", "p95_wer",
+    "num_samples", "num_empty_hyps", "total_ref_words", "total_errors",
+]
+
+
+def save_summary_csv(summary_rows: list[dict], model_name: str) -> str:
+    """Save per-model WER summary stats (one row per mode).
+
+    Each row dict should contain keys from SUMMARY_COLUMNS.
+    """
+    out_path = os.path.join(results_dir(), f"wer_summary_{model_name}.csv")
+    df = pd.DataFrame(summary_rows, columns=SUMMARY_COLUMNS)
+    df.to_csv(out_path, index=False)
+    return out_path
