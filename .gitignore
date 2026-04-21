@@ -18,3 +18,6 @@ pip_cache/
 *_partial.csv
 *.wav
 *.tmp
+
+# Cluster job scripts
+job_*.pbs
