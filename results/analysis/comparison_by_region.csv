@@ -1,0 +1,13 @@
+model,Native_Region,corpus_wer_pct,num_samples
+base,EAST,16.38,352
+base,NORTH,16.87,202
+base,SOUTH,17.5,363
+base,WEST,16.56,69
+medium,EAST,13.58,352
+medium,NORTH,14.89,202
+medium,SOUTH,15.11,363
+medium,WEST,14.77,69
+large,EAST,16.78,352
+large,NORTH,15.89,202
+large,SOUTH,15.78,363
+large,WEST,14.25,69

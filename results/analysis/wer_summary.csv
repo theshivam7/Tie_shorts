@@ -1,0 +1,4 @@
+model,raw,normalized,double_normalized,whisper_normalized
+base,27.86,21.32,17.88,16.92
+medium,24.19,19.23,15.68,14.53
+large,25.91,20.67,17.1,16.02

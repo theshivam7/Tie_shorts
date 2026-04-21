@@ -1,0 +1,7 @@
+model,Discipline_Group,corpus_wer_pct,num_samples
+base,Engineering,17.28,691
+base,Non-Engineering,16.09,295
+medium,Engineering,14.78,691
+medium,Non-Engineering,13.94,295
+large,Engineering,16.08,691
+large,Non-Engineering,15.88,295
