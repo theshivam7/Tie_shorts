@@ -6,3 +6,4 @@ pandas
 tqdm
 librosa
 numpy
+num2words

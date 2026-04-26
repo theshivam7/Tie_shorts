@@ -3,3 +3,4 @@ jiwer
 pandas
 soundfile
 tqdm
+num2words

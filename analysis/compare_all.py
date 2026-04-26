@@ -1,12 +1,10 @@
 """
 Cross-model, cross-mode WER comparison and visualization.
 
-Reads all result CSVs (3 models x 4 modes) and produces:
-- Summary WER matrix (CSV + markdown)
-- Breakdowns by region, speech class, gender
-- Charts (bar charts, grouped comparisons)
+Reads result CSVs from results/stage2_processed/{mode}/
+Produces summary tables, breakdowns, and charts.
 
-Run this after all three model evaluations are complete.
+Run after normalize_and_score.py has completed for all 3 models.
 """
 
 import os
@@ -23,6 +21,12 @@ from utils.wer_compute import compute_corpus_wer
 from utils.normalize import MODES
 
 MODELS = ("base", "medium", "large")
+PRIMARY_MODE = "transcript_clean"  # gold standard mode for breakdowns and charts
+
+RESULTS_DIR = os.path.join(os.path.dirname(__file__), "..", "results")
+STAGE2_DIR = os.path.join(RESULTS_DIR, "stage2_processed")
+ANALYSIS_DIR = os.path.join(RESULTS_DIR, "analysis")
+os.makedirs(ANALYSIS_DIR, exist_ok=True)
 
 
 def _build_md_table(df: pd.DataFrame) -> str:
@@ -36,13 +40,8 @@ def _build_md_table(df: pd.DataFrame) -> str:
     return "\n".join([header, sep] + rows)
 
 
-RESULTS_DIR = os.path.join(os.path.dirname(__file__), "..", "results")
-ANALYSIS_DIR = os.path.join(RESULTS_DIR, "analysis")
-os.makedirs(ANALYSIS_DIR, exist_ok=True)
-
-
 def load_result_csv(model: str, mode: str) -> pd.DataFrame | None:
-    path = os.path.join(RESULTS_DIR, mode, f"wer_{model}_{mode}.csv")
+    path = os.path.join(STAGE2_DIR, mode, f"wer_{model}_{mode}.csv")
     if not os.path.exists(path):
         print(f"  [SKIP] {path} not found")
         return None
@@ -77,9 +76,7 @@ df_summary.to_csv(summary_csv, index=False)
 print(f"\nSummary matrix saved to: {summary_csv}")
 print(df_summary.to_string(index=False))
 
-# --------------- 2. Breakdowns (using whisper_normalized as primary) ---------------
-PRIMARY_MODE = "whisper_normalized"
-
+# --------------- 2. Breakdowns (using standard_num as primary) ---------------
 breakdown_configs = [
     ("Native_Region", "comparison_by_region.csv"),
     ("Speech_Class", "comparison_by_speech_class.csv"),
@@ -124,12 +121,12 @@ print("GENERATING CHARTS")
 print("=" * 70)
 
 plt.rcParams.update({"figure.dpi": 150, "font.size": 10})
+bar_width = 0.25
 
 # Chart 1: WER by model and mode (grouped bar)
 fig, ax = plt.subplots(figsize=(10, 6))
 x_labels = list(MODES)
 x = range(len(x_labels))
-bar_width = 0.25
 
 for i, model in enumerate(MODELS):
     values = []
@@ -157,7 +154,7 @@ fig.savefig(chart_path)
 plt.close(fig)
 print(f"  Saved: {chart_path}")
 
-# Chart 2: WER distribution histogram per model (whisper_normalized mode)
+# Chart 2: WER distribution histogram (standard_num mode)
 fig, ax = plt.subplots(figsize=(10, 6))
 for model_name in MODELS:
     key = (model_name, PRIMARY_MODE)
@@ -176,7 +173,7 @@ fig.savefig(hist_path)
 plt.close(fig)
 print(f"  Saved: {hist_path}")
 
-# Chart 3: WER by duration bucket (whisper_normalized mode)
+# Chart 3: WER by duration bucket (standard_num mode)
 duration_data = {}
 for model_name in MODELS:
     key = (model_name, PRIMARY_MODE)
@@ -221,13 +218,17 @@ if duration_data:
     for bucket in buckets:
         for model_name in MODELS:
             if model_name in duration_data.get(bucket, {}):
-                dur_rows.append({"duration_bucket": bucket, "model": model_name, "corpus_wer_pct": duration_data[bucket][model_name]})
+                dur_rows.append({
+                    "duration_bucket": bucket,
+                    "model": model_name,
+                    "corpus_wer_pct": duration_data[bucket][model_name],
+                })
     if dur_rows:
         dur_csv = os.path.join(ANALYSIS_DIR, "comparison_by_duration.csv")
         pd.DataFrame(dur_rows).to_csv(dur_csv, index=False)
         print(f"  Saved: {dur_csv}")
 
-# Chart 4: WER by region and speech class (whisper_normalized mode)
+# Chart 4: WER by region and speech class (standard_num mode)
 for col, chart_name in [("Native_Region", "wer_by_region.png"), ("Speech_Class", "wer_by_speech_class.png")]:
     region_data = {}
     for model in MODELS:
@@ -282,33 +283,34 @@ report_lines = [
     "",
     "## Evaluation Modes",
     "",
-    "| Mode | reference_source | Reference normalization | Hypothesis normalization | Symmetric? |",
-    "|------|-----------------|------------------------|--------------------------|------------|",
-    "| raw | Transcript | None | None | Yes |",
-    "| normalized | Normalised_Transcript | None (as-is) | EnglishTextNormalizer | No |",
-    "| double_normalized | Normalised_Transcript | EnglishTextNormalizer | EnglishTextNormalizer | Yes |",
-    "| whisper_normalized | Transcript | EnglishTextNormalizer | EnglishTextNormalizer | Yes |",
+    "| Mode | Reference | Before norm | After norm | Purpose |",
+    "|------|-----------|-------------|------------|---------|",
+    "| `transcript_raw` | Transcript | as-is | as-is | Upper bound baseline |",
+    "| `transcript_clean` | Transcript | Transcript | normalized | Gold standard — paper primary |",
+    "| `hf_raw` | Normalised_Transcript | as-is | as-is | HuggingFace normalization as-is |",
+    "| `hf_clean` | Normalised_Transcript | Normalised_Transcript | normalized | HF + our normalizer |",
     "",
     "## Normalization Notes",
     "",
-    "- **raw**: No normalization on either side. WER is highest because punctuation and casing differences are penalized.",
-    "- **normalized**: Intentionally asymmetric — reference uses the dataset's `Normalised_Transcript` as-is while hypothesis gets `EnglishTextNormalizer`. This mode shows the impact of the dataset's own normalization quality on WER.",
-    "- **double_normalized**: Both sides get `EnglishTextNormalizer` applied to `Normalised_Transcript`. Fixes punctuation/casing issues but the dataset's bad number conversions (e.g. 'second' -> 'one s t') still affect the reference.",
-    "- **whisper_normalized**: Gold standard. Both sides apply `EnglishTextNormalizer` to the original `Transcript`, completely bypassing `Normalised_Transcript` errors. Expected to give the lowest WER.",
+    "- `transcript_clean` is the gold standard: uses original ground truth with correct forward normalization.",
+    "- `hf_raw` and `hf_clean` show the impact of the dataset's broken `Normalised_Transcript` (e.g. '1st' → 'one s t').",
+    "- All modes are **symmetric**: same normalization applied to both reference and hypothesis.",
+    "- Normalization: lowercase + expand contractions + fix possessives + digits/ordinals → words (num2words).",
     "",
     "## Column Schema",
     "",
-    "Each result CSV contains: `split, ID, Speaker_ID, Gender, Speech_Class, Native_Region, Speech_Duration_seconds, Discipline_Group, Topic, mode, reference_source, reference_raw, reference, hypothesis_raw, hypothesis, wer`",
+    "Each result CSV contains:",
+    "`split, ID, Speaker_ID, Gender, Speech_Class, Native_Region, Speech_Duration_seconds,`",
+    "`Discipline_Group, Topic, model, mode, reference_source, reference_raw, reference,`",
+    "`hypothesis_raw, hypothesis, wer`",
     "",
-    "- `reference_raw`: source text before normalization (for verification)",
-    "- `reference`: text used for WER computation (after normalization)",
+    "- `reference_raw`: original Transcript before normalization (for manual verification)",
+    "- `reference`: text used for WER after normalization",
     "- `hypothesis_raw`: raw Whisper output before normalization",
     "- `hypothesis`: Whisper output after normalization",
-    "- In `raw` mode: `reference_raw == reference` and `hypothesis_raw == hypothesis`",
     "",
 ]
 
-# Add best model per mode
 report_lines.append("## Best Model per Mode")
 report_lines.append("")
 for mode in MODES:
@@ -317,7 +319,6 @@ for mode in MODES:
         continue
     best = valid.loc[valid[mode].idxmin()]
     report_lines.append(f"- **{mode}**: Whisper {best['model']} ({best[mode]:.2f}%)")
-
 report_lines.append("")
 
 report_path = os.path.join(ANALYSIS_DIR, "summary_report.md")
@@ -333,10 +334,8 @@ print("=" * 70)
 for mode_name in MODES:
     top20_mode_all = []
     for model_name in MODELS:
-        # Load from per-model top-20 CSVs generated by each task script
-        top20_path = os.path.join(RESULTS_DIR, f"top_20_high_wer_{model_name}_{mode_name}.csv")
+        top20_path = os.path.join(STAGE2_DIR, f"top_20_high_wer_{model_name}_{mode_name}.csv")
         if not os.path.exists(top20_path):
-            # Fallback: compute from full results CSV
             key = (model_name, mode_name)
             if key not in all_data:
                 continue
@@ -346,8 +345,10 @@ for mode_name in MODES:
             df_sorted = pd.read_csv(top20_path)
 
         df_sorted = df_sorted.copy()
-        df_sorted.insert(0, "model", model_name)
-        df_sorted.insert(1, "rank", range(1, len(df_sorted) + 1))
+        if "model" not in df_sorted.columns:
+            df_sorted.insert(0, "model", model_name)
+        if "rank" not in df_sorted.columns:
+            df_sorted.insert(1, "rank", range(1, len(df_sorted) + 1))
         top20_mode_all.append(df_sorted)
 
         print(f"\n  --- Whisper {model_name} | mode: {mode_name} ---")

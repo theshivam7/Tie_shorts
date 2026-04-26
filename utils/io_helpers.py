@@ -24,6 +24,13 @@ def results_dir() -> str:
     return os.path.join(os.path.dirname(__file__), "..", "results")
 
 
+def stage1_raw_dir() -> str:
+    """Return the Stage 1 raw transcripts directory (read-only after first run)."""
+    d = os.path.join(results_dir(), "stage1_raw_transcripts")
+    os.makedirs(d, exist_ok=True)
+    return d
+
+
 def save_mode_csv(
     rows: list[dict],
     model_name: str,

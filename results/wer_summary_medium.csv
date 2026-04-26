@@ -1,5 +1,0 @@
-model,mode,reference_source,corpus_wer,mean_wer,median_wer,std_wer,p90_wer,p95_wer,num_samples,num_empty_hyps,total_ref_words,total_errors
-medium,raw,Transcript,0.2419,0.2552,0.2143,0.213,0.4348,0.5517,986,0,51755,12521
-medium,normalized,Normalised_Transcript,0.1923,0.2004,0.1552,0.2099,0.3784,0.4857,986,0,52331,10062
-medium,double_normalized,Normalised_Transcript,0.1568,0.1652,0.12,0.166,0.3265,0.4384,985,0,51798,8122
-medium,whisper_normalized,Transcript,0.1453,0.1575,0.1091,0.2035,0.3133,0.4151,986,0,51815,7528
