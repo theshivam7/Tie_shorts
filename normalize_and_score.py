@@ -27,7 +27,7 @@ import pandas as pd
 
 sys.path.insert(0, os.path.dirname(__file__))
 
-from utils.normalize import MODES, normalize_text, get_reference_source, _REFERENCE_SOURCE
+from utils.normalize import MODES, normalize_text, get_reference_source
 from utils.wer_compute import compute_sample_wer, compute_corpus_wer
 
 MODELS = ("base", "medium", "large", "youtube")

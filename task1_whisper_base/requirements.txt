@@ -1,6 +1,9 @@
 datasets
 jiwer
+openai-whisper
+torch
 pandas
-soundfile
 tqdm
+librosa
+numpy
 num2words
