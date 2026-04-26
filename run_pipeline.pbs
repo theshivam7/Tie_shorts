@@ -2,7 +2,7 @@
 #PBS -N TIE_WER_pipeline
 #PBS -q normal
 #PBS -l select=1:ngpus=1:ncpus=8:mem=64gb
-#PBS -l walltime=8:00:00
+#PBS -l walltime=10:00:00
 #PBS -P personal-csshivam
 #PBS -o logs/pipeline.log
 #PBS -e logs/pipeline.err
@@ -54,6 +54,14 @@ echo "================================================================"
 echo "STAGE 1: Whisper Large Transcription"
 echo "================================================================"
 python task3_whisper_large/wer_whisper_large.py
+
+# --------------- Stage 1: YouTube Captions ---------------
+echo ""
+echo "================================================================"
+echo "STAGE 1: YouTube Captions Fetch (no GPU needed)"
+echo "================================================================"
+pip install youtube-transcript-api -q
+python task4_youtube_captions/fetch_youtube_captions.py
 
 # --------------- Stage 2: Normalization + WER ---------------
 echo ""
